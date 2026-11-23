@@ -50,6 +50,12 @@ uv run python scripts/translate_mlm_to_bridge.py --reverse \
 
 ### Key mappings
 
+Reverse translation preserves an explicit optimizer parameter layout. Bridge's
+`optimizer.use_layer_wise_param_layout=false` emits MLM's
+`--no-use-layer-wise-param-layout`; `true` selects MLM's aligned layout.
+Keep the saved layout when migrating a Muon/emerging-optimizer run. This mapping
+does not convert optimizer checkpoints between compact and aligned layouts.
+
 | MLM flag | Bridge override | Notes |
 |---|---|---|
 | `--num-layers N` | `model.num_layers=N` | |

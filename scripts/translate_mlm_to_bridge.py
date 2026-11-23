@@ -274,6 +274,7 @@ ARG_MAP: dict[str, tuple[str, Any]] = {
     # ── DDP ─────────────────────────────────────────────────────────────
     "overlap-grad-reduce":               ("ddp.overlap_grad_reduce",           "flag"),
     "overlap-param-gather":              ("ddp.overlap_param_gather",          "flag"),
+    "no-use-layer-wise-param-layout":    ("optimizer.use_layer_wise_param_layout", "flag_invert"),
     "no-check-for-nan-in-loss-and-grad": ("ddp.check_for_nan_in_grad",        "flag_invert"),
     "grad-reduce-in-fp32":               ("ddp.grad_reduce_in_fp32",          "flag"),
 

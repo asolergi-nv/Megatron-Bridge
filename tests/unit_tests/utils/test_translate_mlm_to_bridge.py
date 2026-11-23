@@ -930,6 +930,31 @@ class TestTranslateBridgeToMlmPrecision:
         assert any("8-mixed" in note for note in r.notes)
 
 
+class TestOptimizerLayoutTranslation:
+    @pytest.mark.parametrize("aligned", [False, True])
+    def test_reverse_translation_selects_the_requested_mlm_layout(self, monkeypatch, aligned):
+        import sys
+
+        from megatron.training.arguments import parse_args
+
+        result = translate_bridge_to_mlm({"optimizer.use_layer_wise_param_layout": aligned})
+        flag = "no-use-layer-wise-param-layout"
+        argv = ["layout-test"] + (["--" + flag] if flag in result.mlm_args else [])
+        monkeypatch.setattr(sys, "argv", argv)
+        assert parse_args().use_layer_wise_param_layout is aligned
+        assert not result.skipped and not result.unknown
+
+    def test_compact_layout_survives_both_translation_directions(self):
+        arguments, environment = parse_raw_args("--no-use-layer-wise-param-layout")
+        bridge = translate(arguments, environment)
+        mlm = translate_bridge_to_mlm(bridge.overrides)
+        assert "no-use-layer-wise-param-layout" in mlm.mlm_args
+
+    def test_partial_input_does_not_choose_an_optimizer_layout(self):
+        result = translate_bridge_to_mlm({"optimizer.lr": 0.001})
+        assert "no-use-layer-wise-param-layout" not in result.mlm_args
+
+
 class TestTranslateBridgeToMlmActivation:
     """Tests for activation function reverse translation."""
 
