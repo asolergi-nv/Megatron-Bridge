@@ -249,6 +249,24 @@ class _FakeLayerWiseChildOpt:
 class TestMemoryEfficientPrecisionAwareOptimizerStateCheckpointing:
     """Tests for CPU staging of portable precision-aware Adam checkpoint state."""
 
+    @pytest.mark.parametrize("chained", [False, True])
+    def test_native_core_staging_keeps_te_accessor_intact(self, chained):
+        native, inner, _ = self._distributed_optimizer()
+        native.config.stage_precision_aware_optimizer_state_on_cpu = True
+        legacy, legacy_inner, _ = self._distributed_optimizer()
+        optimizer = _ChainedOpt([native, legacy]) if chained else native
+        original = inner.get_unscaled_state
+        with (
+            patch("megatron.bridge.training.optim._get_te_fused_adam_class", return_value=_FakeFusedAdam),
+            memory_efficient_precision_aware_optimizer_state_checkpointing(optimizer, enabled=True) as patched,
+        ):
+            assert inner.get_unscaled_state == original
+            assert "get_unscaled_state" not in inner.__dict__
+            assert patched == int(chained)
+            if chained:
+                assert "get_unscaled_state" in legacy_inner.__dict__
+        assert "get_unscaled_state" not in legacy_inner.__dict__
+
     @staticmethod
     def _distributed_optimizer(
         *,

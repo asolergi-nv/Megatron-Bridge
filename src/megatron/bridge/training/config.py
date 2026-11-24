@@ -555,7 +555,8 @@ class CheckpointConfig(MTrainCheckpointConfig):
     portable FP32 checkpoint representation would exceed available GPU memory.
     The checkpoint values and dtypes are unchanged; only their device during
     state-dict construction is affected. Supported only for ``torch_dist``
-    checkpoints.
+    checkpoints. Uses the native OptimizerConfig option when supported by Core;
+    older Core builds retain the scoped compatibility implementation.
     """
 
     pretrained_checkpoint: Optional[str] = None
@@ -2510,6 +2511,37 @@ def _validate_and_sync_distributed_optimizer_settings(config: ConfigContainer) -
             )
         config.ddp.overlap_param_gather = True
         config.optimizer.overlap_param_gather = True
+
+    _sync_optimizer_checkpoint_staging(config)
+
+
+def _sync_optimizer_checkpoint_staging(config: ConfigContainer) -> None:
+    """Use Core's native CPU checkpoint staging when the installed Core supports it."""
+    if not hasattr(MCoreOptimizerConfig, "stage_precision_aware_optimizer_state_on_cpu"):
+        return
+
+    optimizer = config.optimizer
+    requested = config.checkpoint.stage_precision_aware_optimizer_state_on_cpu
+    # The legacy checkpoint option was a no-op for offload, FSDP, ordinary Adam,
+    # and layer-wise optimizers. Preserve that behavior when translating it.
+    eligible = (
+        optimizer.optimizer == "adam"
+        and optimizer.use_distributed_optimizer
+        and optimizer.use_precision_aware_optimizer_no_fp8_or_ds_fp8
+        and not optimizer.optimizer_cpu_offload
+        and not optimizer.use_layer_wise_distributed_optimizer
+        and not config.ddp.use_megatron_fsdp
+        and not config.dist.use_torch_fsdp2
+    )
+    if requested and eligible:
+        optimizer.stage_precision_aware_optimizer_state_on_cpu = True
+
+    # Bridge does not call Core's run-config validation. Cover native opt-ins
+    # here too, even when the legacy CheckpointConfig option is left disabled.
+    if optimizer.stage_precision_aware_optimizer_state_on_cpu and (
+        config.checkpoint.ckpt_format != "torch_dist" or config.ddp.use_megatron_fsdp or config.dist.use_torch_fsdp2
+    ):
+        raise ValueError("CPU checkpoint staging requires torch_dist without FSDP.")
 
 
 def _validate_mixed_precision_consistency(config: ConfigContainer) -> None:

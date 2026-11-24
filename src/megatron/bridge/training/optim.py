@@ -192,6 +192,10 @@ def memory_efficient_precision_aware_optimizer_state_checkpointing(
     values and dtypes, but moves each tensor to CPU immediately so only one
     expansion is live on GPU at a time.
 
+    Config finalization forwards this option to Core when native staging is
+    available. Those optimizers are left untouched; this context remains a
+    compatibility fallback for older Core builds and direct checkpoint callers.
+
     Args:
         optimizer: Optimizer participating in checkpointing.
         enabled: Whether to stage compatible optimizer state on CPU.
@@ -215,6 +219,9 @@ def memory_efficient_precision_aware_optimizer_state_checkpointing(
 
     try:
         for distributed_optimizer in sub_optimizers:
+            config = getattr(distributed_optimizer, "config", None)
+            if getattr(config, "stage_precision_aware_optimizer_state_on_cpu", False) is True:
+                continue
             if getattr(distributed_optimizer, "is_stub_optimizer", False):
                 continue
             if not getattr(getattr(distributed_optimizer, "config", None), "use_precision_aware_optimizer", False):
